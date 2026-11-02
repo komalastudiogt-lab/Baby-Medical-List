@@ -295,11 +295,119 @@
     }).catch(function () {});
   }
 
+  /* ---------- selectores propios de fecha y hora ---------- */
+  var MESES_L = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  var DIAS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+  var S = { tipo: '', target: '', opc: false, y: 0, m: 0, fecha: '', h: 9, mi: 0 };
+  var ALTO = 44;
+
+  function fmtHora12(v) {
+    if (!v) return 'Sin hora';
+    var p = String(v).split(':'), h = +p[0] || 0, m = +p[1] || 0;
+    return ((h % 12) || 12) + ':' + pad(m) + (h >= 12 ? ' p. m.' : ' a. m.');
+  }
+  function campoFecha(id, valor, opc) {
+    return '<input type="hidden" id="' + id + '" value="' + esc(valor) + '">' +
+      '<button type="button" class="sel" id="' + id + '_b" data-pick="fecha" data-target="' + id + '" data-opc="' + (opc ? 1 : 0) + '">' + esc(valor ? fmtF(valor) : 'Elegir fecha') + '</button>';
+  }
+  function campoHora(id, valor, opc) {
+    return '<input type="hidden" id="' + id + '" value="' + esc(valor) + '">' +
+      '<button type="button" class="sel" id="' + id + '_b" data-pick="hora" data-target="' + id + '" data-opc="' + (opc ? 1 : 0) + '">' + esc(fmtHora12(valor)) + '</button>';
+  }
+
+  function calendario() {
+    var primero = new Date(S.y, S.m - 1, 1).getDay(), n = diasMes(S.y, S.m), hoy = hoyISO();
+    var h = '<div class="cal-cab">' +
+      '<button type="button" class="flecha" data-sel="anio-" aria-label="Año anterior">«</button>' +
+      '<button type="button" class="flecha" data-sel="mes-" aria-label="Mes anterior">‹</button>' +
+      '<span class="cal-tit">' + MESES_L[S.m - 1] + ' ' + S.y + '</span>' +
+      '<button type="button" class="flecha" data-sel="mes+" aria-label="Mes siguiente">›</button>' +
+      '<button type="button" class="flecha" data-sel="anio+" aria-label="Año siguiente">»</button></div>' +
+      '<div class="cal-sem">' + DIAS.map(function (d) { return '<span>' + d + '</span>'; }).join('') + '</div><div class="cal-dias">';
+    for (var i = 0; i < primero; i++) h += '<span></span>';
+    for (var d = 1; d <= n; d++) {
+      var iso = S.y + '-' + pad(S.m) + '-' + pad(d);
+      h += '<button type="button" class="dia' + (iso === S.fecha ? ' elegido' : '') + (iso === hoy ? ' hoy' : '') + '" data-sel="dia" data-v="' + iso + '">' + d + '</button>';
+    }
+    return h + '</div>';
+  }
+  function ruedas() {
+    var hs = '', ms = '', i;
+    for (i = 1; i <= 12; i++) hs += '<div class="it">' + i + '</div>';
+    for (i = 0; i < 60; i++) ms += '<div class="it">' + pad(i) + '</div>';
+    return '<div class="ruedas"><div class="banda"></div>' +
+      '<div class="rueda" id="rH">' + hs + '</div><div class="dospuntos">:</div>' +
+      '<div class="rueda" id="rM">' + ms + '</div>' +
+      '<div class="rueda rp" id="rP"><div class="it">a. m.</div><div class="it">p. m.</div></div></div>';
+  }
+  function marcarRueda(el) {
+    var i = Math.round(el.scrollTop / ALTO), items = el.children;
+    for (var k = 0; k < items.length; k++) items[k].className = k === i ? 'it act' : 'it';
+  }
+  function posicionarRuedas() {
+    var cfg = [['rH', ((S.h % 12) || 12) - 1], ['rM', S.mi], ['rP', S.h >= 12 ? 1 : 0]];
+    cfg.forEach(function (c) {
+      var el = $(c[0]);
+      el.scrollTop = c[1] * ALTO;
+      marcarRueda(el);
+      el.addEventListener('scroll', function () {
+        var me = this;
+        if (me.__raf) return;
+        me.__raf = requestAnimationFrame(function () { me.__raf = 0; marcarRueda(me); });
+      });
+    });
+  }
+  function leerRueda(id, max) {
+    return Math.max(0, Math.min(max, Math.round($(id).scrollTop / ALTO)));
+  }
+  function pintarSelector() {
+    $('selCuerpo').innerHTML = S.tipo === 'fecha' ? calendario() : ruedas();
+    if (S.tipo === 'hora') posicionarRuedas();
+  }
+  function abrirSelector(tipo, target, opc) {
+    var v = $(target).value;
+    S.tipo = tipo; S.target = target; S.opc = opc;
+    if (tipo === 'fecha') {
+      var p = parseF(v) || parseF(hoyISO());
+      S.y = p.y; S.m = p.m; S.fecha = v || '';
+      $('selTitulo').textContent = 'Elige la fecha';
+    } else {
+      var q = String(v || '09:00').split(':');
+      S.h = +q[0] || 0; S.mi = +q[1] || 0;
+      $('selTitulo').textContent = 'Elige la hora';
+    }
+    $('selBorrar').hidden = !opc;
+    $('selector').hidden = false;
+    pintarSelector();
+  }
+  function cerrarSelector() { $('selector').hidden = true; }
+  function accionSelector(a, v) {
+    if (a === 'cancelar') { cerrarSelector(); return; }
+    if (a === 'dia') { S.fecha = v; pintarSelector(); return; }
+    if (a === 'mes-') { S.m--; if (S.m < 1) { S.m = 12; S.y--; } pintarSelector(); return; }
+    if (a === 'mes+') { S.m++; if (S.m > 12) { S.m = 1; S.y++; } pintarSelector(); return; }
+    if (a === 'anio-') { S.y--; pintarSelector(); return; }
+    if (a === 'anio+') { S.y++; pintarSelector(); return; }
+    var val = '';
+    if (a === 'ok') {
+      if (S.tipo === 'fecha') {
+        if (!S.fecha) { cerrarSelector(); return; }
+        val = S.fecha;
+      } else {
+        var ih = leerRueda('rH', 11), im = leerRueda('rM', 59), ip = leerRueda('rP', 1);
+        val = pad(((ih + 1) % 12) + (ip ? 12 : 0)) + ':' + pad(im);
+      }
+    }
+    $(S.target).value = val;
+    $(S.target + '_b').textContent = S.tipo === 'fecha' ? (val ? fmtF(val) : 'Elegir fecha') : fmtHora12(val);
+    cerrarSelector();
+  }
+
   /* ---------- formularios ---------- */
   function formPerfil() {
     var p = estado.perfil;
     var h = '<label>Nombre del bebé<input type="text" id="f_nombre" maxlength="40" value="' + esc(p.nombre) + '"></label>' +
-      '<label>Fecha de nacimiento<input type="date" id="f_nac" value="' + esc(p.nacimiento) + '"></label>';
+      '<label>Fecha de nacimiento' + campoFecha('f_nac', p.nacimiento, true) + '</label>';
     abrirModal('Datos del bebé', h, 'Guardar', function () {
       var nac = $('f_nac').value;
       if (nac && nac > hoyISO()) return errorModal('La fecha de nacimiento no puede ser futura.');
@@ -312,7 +420,7 @@
 
   function formMedida(id) {
     var m = id ? buscar(estado.medidas, id) : null;
-    var h = '<label>Fecha<input type="date" id="f_fecha" value="' + esc(m ? m.fecha : hoyISO()) + '"></label>' +
+    var h = '<label>Fecha' + campoFecha('f_fecha', m ? m.fecha : hoyISO(), false) + '</label>' +
       '<div class="dos"><label>Peso (kg)<input type="text" inputmode="decimal" id="f_peso" placeholder="3.450" value="' + esc(m && m.peso != null ? m.peso : '') + '"></label>' +
       '<label>Altura (cm)<input type="text" inputmode="decimal" id="f_alt" placeholder="50.5" value="' + esc(m && m.altura != null ? m.altura : '') + '"></label></div>' +
       '<label>Notas (opcional)<textarea id="f_notas" maxlength="300">' + esc(m ? m.notas : '') + '</textarea></label>';
@@ -333,8 +441,8 @@
     var c = id ? buscar(estado.citas, id) : null;
     var h = '<label>Tipo<select id="f_tipo">' + opciones(TIPOS, c ? c.tipo : 'Pediatra') + '</select></label>' +
       '<label>Detalle (opcional, ej. nombre de la vacuna)<input type="text" id="f_motivo" maxlength="60" value="' + esc(c ? c.motivo : '') + '"></label>' +
-      '<div class="dos"><label>Fecha<input type="date" id="f_fecha" value="' + esc(c ? c.fecha : hoyISO()) + '"></label>' +
-      '<label>Hora<input type="time" id="f_hora" value="' + esc(c ? (c.hora || '') : '09:00') + '"></label></div>' +
+      '<div class="dos"><label>Fecha' + campoFecha('f_fecha', c ? c.fecha : hoyISO(), false) + '</label>' +
+      '<label>Hora' + campoHora('f_hora', c ? (c.hora || '') : '09:00', true) + '</label></div>' +
       '<label>Lugar (opcional)<input type="text" id="f_lugar" maxlength="60" value="' + esc(c ? c.lugar : '') + '"></label>' +
       '<label>Recordatorio<select id="f_aviso">' + opciones(AVISOS, c ? c.aviso : '1440') + '</select></label>' +
       '<label>Notas (opcional)<textarea id="f_notas" maxlength="300">' + esc(c ? c.notas : '') + '</textarea></label>';
@@ -356,8 +464,8 @@
     var h = '<label>Medicamento<input type="text" id="f_nombre" maxlength="60" value="' + esc(m ? m.nombre : '') + '"></label>' +
       '<label>Dosis indicada (ej. 2.5 ml)<input type="text" id="f_dosis" maxlength="40" value="' + esc(m ? m.dosis : '') + '"></label>' +
       '<label>Cada cuántas horas<input type="text" inputmode="decimal" id="f_cada" placeholder="8" value="' + esc(m ? m.cada : '') + '"></label>' +
-      '<div class="dos"><label>Primera dosis (día)<input type="date" id="f_inicio" value="' + esc(m ? m.inicio : hoyISO()) + '"></label>' +
-      '<label>Hora<input type="time" id="f_hora" value="' + esc(m ? m.hora : horaAhora()) + '"></label></div>' +
+      '<div class="dos"><label>Primera dosis (día)' + campoFecha('f_inicio', m ? m.inicio : hoyISO(), false) + '</label>' +
+      '<label>Hora' + campoHora('f_hora', m ? m.hora : horaAhora(), false) + '</label></div>' +
       '<label>Duración en días (vacío = sin fecha de fin)<input type="text" inputmode="numeric" id="f_dias" placeholder="7" value="' + esc(m && m.dias > 0 ? m.dias : '') + '"></label>' +
       '<label>Notas (opcional)<textarea id="f_notas" maxlength="300">' + esc(m ? m.notas : '') + '</textarea></label>';
     abrirModal(m ? 'Editar medicamento' : 'Nuevo medicamento', h, 'Guardar', function () {
@@ -477,6 +585,26 @@
       if (pestana === 'crecimiento') formMedida(0);
       else if (pestana === 'citas') formCita(0);
       else formMed(0);
+    });
+    var selEl = document.createElement('div');
+    selEl.id = 'selector'; selEl.className = 'selector'; selEl.hidden = true;
+    selEl.innerHTML = '<div class="sel-hoja"><h3 id="selTitulo"></h3><div id="selCuerpo"></div><div class="botones">' +
+      '<button id="selBorrar" class="sec" type="button" data-sel="borrar">Borrar</button>' +
+      '<button class="sec" type="button" data-sel="cancelar">Cancelar</button>' +
+      '<button class="pri" type="button" data-sel="ok">Establecer</button></div></div>';
+    document.body.appendChild(selEl);
+    selEl.addEventListener('click', function (e) {
+      if (e.target === this) { cerrarSelector(); return; }
+      var b = e.target;
+      while (b && b !== this && !b.getAttribute('data-sel')) b = b.parentNode;
+      if (!b || b === this) return;
+      accionSelector(b.getAttribute('data-sel'), b.getAttribute('data-v'));
+    });
+    $('modalCuerpo').addEventListener('click', function (e) {
+      var b = e.target;
+      while (b && b !== this && !b.getAttribute('data-pick')) b = b.parentNode;
+      if (!b || b === this) return;
+      abrirSelector(b.getAttribute('data-pick'), b.getAttribute('data-target'), b.getAttribute('data-opc') === '1');
     });
     $('btnPerfil').addEventListener('click', formPerfil);
     $('btnPdf').addEventListener('click', crearPDF);
