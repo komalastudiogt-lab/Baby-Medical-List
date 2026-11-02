@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FFF9F4">
+<title>Baby Medical List</title>
+<script>
+(function () {
+  function caja(t) {
+    var d = document.getElementById('__err');
+    if (!d) {
+      d = document.createElement('div');
+      d.id = '__err';
+      d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c62828;color:#fff;padding:10px 12px;font:13px/1.35 sans-serif;white-space:pre-wrap';
+      (document.body || document.documentElement).appendChild(d);
+    }
+    d.textContent = t;
+  }
+  window.addEventListener('error', function (e) {
+    caja('Error: ' + (e.message || 'desconocido') + ' (línea ' + (e.lineno || '?') + ')');
+  });
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (window.__appListo !== true) {
+        caja('app.js no arrancó: el archivo puede estar dañado o incompleto');
+      }
+    }, 1000);
+  });
+})();
+</script>
+<link rel="stylesheet" href="./css/styles.css">
+<script src="./js/html2pdf.js" defer></script>
+<script src="./js/native-bridge.js" defer></script>
+<script src="./js/app.js" defer></script>
+</head>
+<body>
+<header class="cab">
+  <button class="perfil" id="btnPerfil" type="button">
+    <span class="nombre" id="cabNombre">Mi bebé</span>
+    <span class="edad" id="cabEdad"></span>
+  </button>
+  <button class="icbtn" id="btnPdf" type="button" aria-label="Crear PDF"></button>
+</header>
+
+<main id="contenido"></main>
+
+<button id="fab" class="fab" type="button" aria-label="Agregar"></button>
+
+<nav class="nav">
+  <button type="button" data-tab="crecimiento"></button>
+  <button type="button" data-tab="citas"></button>
+  <button type="button" data-tab="medicinas"></button>
+</nav>
+
+<div id="modal" class="modal" hidden>
+  <div class="hoja">
+    <h2 id="modalTitulo"></h2>
+    <div id="modalCuerpo"></div>
+    <p class="err" id="modalError"></p>
+    <div class="botones">
+      <button id="modalCancelar" class="sec" type="button">Cancelar</button>
+      <button id="modalOk" class="pri" type="button">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+</body>
+</html>
