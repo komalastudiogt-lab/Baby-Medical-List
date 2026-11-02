@@ -97,3 +97,27 @@ main{flex:1;overflow-y:auto;padding:4px 14px 150px;-webkit-overflow-scrolling:to
   @keyframes entra{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   @keyframes sube{from{transform:translateY(40px)}to{transform:none}}
 }
+
+/* ---- selectores propios de fecha y hora ---- */
+.hoja .sel{display:block;width:100%;margin-top:4px;padding:11px 12px;border:2px solid var(--borde);border-radius:14px;background:var(--blanco);color:var(--texto);font:inherit;font-weight:400;text-align:left;-webkit-appearance:none;appearance:none}
+.hoja .sel:active{border-color:var(--pri)}
+.selector{position:fixed;inset:0;background:rgba(75,68,87,.45);display:flex;align-items:flex-end;justify-content:center;z-index:70}
+.sel-hoja{background:var(--fondo);width:100%;max-width:520px;border-radius:26px 26px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+.sel-hoja h3{margin:0 0 8px;font-size:18px}
+.sel-hoja .botones button{padding:12px 6px;font-size:15px}
+.cal-cab{display:flex;align-items:center;justify-content:space-between;gap:4px;margin:4px 0 8px}
+.cal-tit{flex:1;text-align:center;font-weight:700}
+.flecha{width:40px;height:40px;border:0;border-radius:50%;background:var(--lila);color:var(--texto);font:inherit;font-size:20px;font-weight:700;line-height:1}
+.cal-sem,.cal-dias{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;row-gap:4px}
+.cal-sem span{font-size:13px;font-weight:700;color:var(--suave);padding:4px 0}
+.dia{height:42px;width:42px;margin:0 auto;border:2px solid transparent;border-radius:50%;background:transparent;color:var(--texto);font:inherit;font-size:16px}
+.dia.hoy{border-color:var(--pri)}
+.dia.elegido{background:var(--pri);color:var(--pri-t);font-weight:700}
+.ruedas{position:relative;display:flex;justify-content:center;align-items:center;gap:6px;height:220px;margin:6px 0}
+.banda{position:absolute;left:8px;right:8px;top:88px;height:44px;border-radius:16px;background:var(--lila);pointer-events:none}
+.rueda{position:relative;z-index:1;width:80px;height:220px;overflow-y:auto;scroll-snap-type:y mandatory;scroll-padding-block:88px;padding-block:88px;scrollbar-width:none}
+.rueda::-webkit-scrollbar{display:none}
+.rueda.rp{width:84px}
+.it{height:44px;display:flex;align-items:center;justify-content:center;scroll-snap-align:start;font-size:20px;color:var(--suave)}
+.it.act{color:var(--texto);font-weight:700;font-size:24px}
+.dospuntos{position:relative;z-index:1;font-size:24px;font-weight:700}
