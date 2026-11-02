@@ -35,7 +35,7 @@
 
   /* ---------- datos ---------- */
   function porDefecto() {
-    return { perfil: { nombre: '', nacimiento: '', visto: false }, medidas: [], citas: [], meds: [], sig: 1 };
+    return { perfil: { nombre: '', nacimiento: '', visto: false }, medidas: [], citas: [], meds: [], sig: 1, unidad: 'kg' };
   }
   function arr(x) { return Object.prototype.toString.call(x) === '[object Array]' ? x : []; }
   function cargar() {
@@ -54,6 +54,7 @@
         d.citas = arr(o.citas);
         d.meds = arr(o.meds);
         d.sig = (typeof o.sig === 'number' && o.sig > 0) ? o.sig : 1;
+        d.unidad = o.unidad === 'lb' ? 'lb' : 'kg';
       }
       return d;
     } catch (e) { return porDefecto(); }
@@ -117,6 +118,10 @@
     if (v == null) return '—';
     return String(Math.round(v * Math.pow(10, dec)) / Math.pow(10, dec));
   }
+  var LB = 2.2046226218;
+  function aUnidad(kg) { return estado.unidad === 'lb' ? kg * LB : kg; }
+  function deUnidad(v) { return estado.unidad === 'lb' ? v / LB : v; }
+  function decPeso() { return estado.unidad === 'lb' ? 2 : 3; }
   function opciones(lista, sel) {
     return lista.map(function (x) {
       var v = typeof x === 'string' ? x : x.v, t = typeof x === 'string' ? x : x.t;
@@ -160,6 +165,7 @@
     for (var j = i + 1; j < lista.length; j++) {
       if (lista[j][campo] != null) {
         var d = v - lista[j][campo];
+        if (campo === 'peso') d = aUnidad(d);
         return (d > 0 ? '+' : '') + fmtNum(d, dec);
       }
     }
@@ -175,7 +181,7 @@
       h += '<div class="tarjeta c-celeste"><div class="fila"><span class="titulo">' + esc(fmtF(m.fecha)) + '</span>' +
         (e ? '<span class="chip">' + esc(e) + '</span>' : '') + '</div>' +
         '<div class="datos">' +
-        '<div class="dato"><span class="et">Peso</span><span class="val">' + (m.peso != null ? esc(fmtNum(m.peso, 3)) + ' kg' : '—') + '</span><small>' + esc(difPrevio(l, i, 'peso', 3)) + '</small></div>' +
+        '<div class="dato"><span class="et">Peso</span><span class="val">' + (m.peso != null ? esc(fmtNum(aUnidad(m.peso), decPeso())) + ' ' + estado.unidad : '—') + '</span><small>' + esc(difPrevio(l, i, 'peso', decPeso())) + '</small></div>' +
         '<div class="dato"><span class="et">Altura</span><span class="val">' + (m.altura != null ? esc(fmtNum(m.altura, 1)) + ' cm' : '—') + '</span><small>' + esc(difPrevio(l, i, 'altura', 1)) + '</small></div>' +
         '</div>' +
         (m.notas ? '<p class="nota">' + esc(m.notas) + '</p>' : '') +
@@ -244,6 +250,8 @@
     $('cabNombre').textContent = estado.perfil.nombre || 'Mi bebé';
     var e = edadEn(hoyISO());
     $('cabEdad').textContent = e || (estado.perfil.nacimiento ? '' : 'Toca para agregar su nacimiento');
+    var ub = $('btnUnidad');
+    if (ub) ub.innerHTML = '<span class="u' + (estado.unidad === 'kg' ? ' act' : '') + '">kg</span><span class="u' + (estado.unidad === 'lb' ? ' act' : '') + '">lb</span>';
     var h = pestana === 'crecimiento' ? vistaCrecimiento() : (pestana === 'citas' ? vistaCitas() : vistaMedicinas());
     $('contenido').innerHTML = h;
     var g = $('grafica');
@@ -263,37 +271,39 @@
     return '<button type="button" class="g-chip' + (metrica === m ? ' act' : '') + '" data-m="' + m + '">' + texto + '</button>';
   }
   function htmlGrafica() {
-    var campo = metrica, unidad = campo === 'peso' ? 'kg' : 'cm', dec = campo === 'peso' ? 2 : 1;
+    var campo = metrica, esPeso = campo === 'peso', lb = estado.unidad === 'lb';
+    var unidad = esPeso ? estado.unidad : 'cm', dec = esPeso ? 2 : 1;
     var pts = estado.medidas.filter(function (m) { return m[campo] != null && dt(m.fecha); })
       .sort(function (a, b) { return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
-    var color = campo === 'peso' ? '#E9779F' : '#5DAEDD';
+    var vals = pts.map(function (p) { return esPeso ? aUnidad(p.peso) : p.altura; });
+    var color = esPeso ? '#E9779F' : '#5DAEDD';
     var h = '<div class="g-cab"><div class="g-tabs">' + chipGrafica('peso', 'Peso') + chipGrafica('altura', 'Altura') + '</div>';
     if (pts.length > 1) {
-      var d = pts[pts.length - 1][campo] - pts[0][campo];
+      var d = vals[vals.length - 1] - vals[0];
       h += '<span class="g-res">' + (d > 0 ? '+' : '') + fmtNum(d, dec) + ' ' + unidad + ' en total</span>';
     }
     h += '</div>';
     if (!pts.length) return h + '<div class="g-vacio">Anota la primera medida para ver la gráfica.</div>';
 
-    var W = 320, H = 124, L = 34, R = 16, T = 16, B = 22, pw = W - L - R, ph = H - T - B, n = pts.length;
-    var vals = pts.map(function (p) { return p[campo]; });
+    var W = 320, H = 140, L = 38, R = 12, T = 20, B = 26, ph = H - T - B, n = pts.length;
+    var a = L + 16, b = W - R - 16;
     var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
-    var minimo = campo === 'peso' ? 0.2 : 1;
+    var minimo = esPeso ? (lb ? 0.5 : 0.2) : 1;
     if (max - min < minimo) { var c = (max + min) / 2; min = c - minimo; max = c + minimo; }
-    else { var colchon = (max - min) * 0.12; min -= colchon; max += colchon; }
+    else { var colchon = (max - min) * 0.14; min -= colchon; max += colchon; }
     if (min < 0) min = 0;
     var t0 = dt(pts[0].fecha).getTime(), t1 = dt(pts[n - 1].fecha).getTime();
-    function X(p) { return t1 === t0 ? L + pw / 2 : L + (dt(p.fecha).getTime() - t0) / (t1 - t0) * pw; }
+    function X(p) { return t1 === t0 ? (a + b) / 2 : a + (dt(p.fecha).getTime() - t0) / (t1 - t0) * (b - a); }
     function Y(v) { return T + ph - (v - min) / (max - min) * ph; }
 
     var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Gráfica de ' + campo + '">';
     for (var i = 0; i < 3; i++) {
       var gv = min + (max - min) * i / 2, gy = Y(gv).toFixed(1);
-      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="#F0E4EA" stroke-width="1"/>' +
-        '<text class="gtxt" x="' + (L - 4) + '" y="' + (+gy + 3) + '" text-anchor="end">' + fmtNum(gv, 1) + '</text>';
+      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="#EDE3E8" stroke-width="1"/>' +
+        '<text class="gtxt" x="' + (L - 5) + '" y="' + (+gy + 4) + '" text-anchor="end">' + fmtNum(gv, 1) + '</text>';
     }
     var xs = pts.map(function (p) { return X(p).toFixed(1); });
-    var ys = pts.map(function (p) { return Y(p[campo]).toFixed(1); });
+    var ys = vals.map(function (v) { return Y(v).toFixed(1); });
     if (n > 1) {
       var base = (T + ph).toFixed(1), linea = '', area = 'M' + xs[0] + ',' + base;
       for (var k = 0; k < n; k++) { linea += xs[k] + ',' + ys[k] + ' '; area += ' L' + xs[k] + ',' + ys[k]; }
@@ -302,16 +312,16 @@
         '<polyline points="' + linea + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
     }
     for (var j = 0; j < n; j++) {
-      s += '<circle cx="' + xs[j] + '" cy="' + ys[j] + '" r="3.8" fill="#fff" stroke="' + color + '" stroke-width="2"/>';
+      s += '<circle cx="' + xs[j] + '" cy="' + ys[j] + '" r="4" fill="#fff" stroke="' + color + '" stroke-width="2"/>';
       if (n <= 5 || j === 0 || j === n - 1) {
-        s += '<text class="gtxt val" x="' + xs[j] + '" y="' + (ys[j] - 8) + '" text-anchor="middle">' + fmtNum(vals[j], dec) + '</text>';
+        s += '<text class="gtxt val" x="' + xs[j] + '" y="' + (ys[j] - 9) + '" text-anchor="middle">' + fmtNum(vals[j], dec) + '</text>';
       }
     }
     if (n > 1) {
-      s += '<text class="gtxt" x="' + L + '" y="' + (H - 6) + '" text-anchor="start">' + esc(fmtCorta(pts[0].fecha)) + '</text>' +
-        '<text class="gtxt" x="' + (W - R) + '" y="' + (H - 6) + '" text-anchor="end">' + esc(fmtCorta(pts[n - 1].fecha)) + '</text>';
+      s += '<text class="gtxt" x="' + L + '" y="' + (H - 7) + '" text-anchor="start">' + esc(fmtCorta(pts[0].fecha)) + '</text>' +
+        '<text class="gtxt" x="' + (W - R) + '" y="' + (H - 7) + '" text-anchor="end">' + esc(fmtCorta(pts[n - 1].fecha)) + '</text>';
     } else {
-      s += '<text class="gtxt" x="' + (L + pw / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(fmtCorta(pts[0].fecha)) + '</text>';
+      s += '<text class="gtxt" x="' + ((a + b) / 2) + '" y="' + (H - 7) + '" text-anchor="middle">' + esc(fmtCorta(pts[0].fecha)) + '</text>';
     }
     return h + s + '</svg>';
   }
@@ -511,14 +521,15 @@
   function formMedida(id) {
     var m = id ? buscar(estado.medidas, id) : null;
     var h = '<label>Fecha' + campoFecha('f_fecha', m ? m.fecha : hoyISO(), false) + '</label>' +
-      '<div class="dos"><label>Peso (kg)<input type="text" inputmode="decimal" id="f_peso" placeholder="3.450" value="' + esc(m && m.peso != null ? m.peso : '') + '"></label>' +
+      '<div class="dos"><label>Peso (' + estado.unidad + ')<input type="text" inputmode="decimal" id="f_peso" placeholder="' + (estado.unidad === 'lb' ? '7.50' : '3.450') + '" value="' + esc(m && m.peso != null ? fmtNum(aUnidad(m.peso), decPeso()) : '') + '"></label>' +
       '<label>Altura (cm)<input type="text" inputmode="decimal" id="f_alt" placeholder="50.5" value="' + esc(m && m.altura != null ? m.altura : '') + '"></label></div>' +
       '<label>Notas (opcional)<textarea id="f_notas" maxlength="300">' + esc(m ? m.notas : '') + '</textarea></label>';
     abrirModal(m ? 'Editar medida' : 'Nueva medida', h, 'Guardar', function () {
       var fecha = $('f_fecha').value, peso = num($('f_peso').value), alt = num($('f_alt').value);
+      if (peso !== null) peso = Math.round(deUnidad(peso) * 10000) / 10000;
       if (!fecha) return errorModal('Elige la fecha.');
       if (peso === null && alt === null) return errorModal('Anota al menos el peso o la altura.');
-      if (peso !== null && (peso <= 0 || peso > 40)) return errorModal('Revisa el peso: debe estar entre 0 y 40 kg.');
+      if (peso !== null && (peso <= 0 || peso > 40)) return errorModal('Revisa el peso: el valor no parece correcto.');
       if (alt !== null && (alt <= 0 || alt > 150)) return errorModal('Revisa la altura: debe estar entre 0 y 150 cm.');
       var o = m || { id: estado.sig++ };
       o.fecha = fecha; o.peso = peso; o.altura = alt; o.notas = $('f_notas').value.trim();
@@ -620,7 +631,7 @@
       '<div style="font-size:14px">' + esc(p.nombre || 'Bebé') + (p.nacimiento ? ' · Nació el ' + esc(fmtF(p.nacimiento)) : '') + '</div>' +
       '<div style="font-size:12px;color:#7A7288;margin-bottom:12px">Reporte generado el ' + esc(fmtF(hoyISO())) + '</div>' +
       '<h2 style="font-size:16px;margin:14px 0 6px">Crecimiento</h2>' +
-      tabla(['Fecha', 'Edad', 'Peso (kg)', 'Altura (cm)', 'Notas'], med.map(function (m) { return [fmtF(m.fecha), edadEn(m.fecha), m.peso != null ? fmtNum(m.peso, 3) : '—', m.altura != null ? fmtNum(m.altura, 1) : '—', m.notas || '']; })) +
+      tabla(['Fecha', 'Edad', 'Peso (' + estado.unidad + ')', 'Altura (cm)', 'Notas'], med.map(function (m) { return [fmtF(m.fecha), edadEn(m.fecha), m.peso != null ? fmtNum(aUnidad(m.peso), decPeso()) : '—', m.altura != null ? fmtNum(m.altura, 1) : '—', m.notas || '']; })) +
       '<h2 style="font-size:16px;margin:14px 0 6px">Citas</h2>' +
       tabla(['Fecha', 'Tipo', 'Lugar', 'Estado', 'Notas'], cit.map(function (c) { return [fmtF(c.fecha) + (c.hora ? ' ' + c.hora : ''), c.tipo + (c.motivo ? ' · ' + c.motivo : ''), c.lugar || '', c.hecha ? 'Hecha' : 'Pendiente', c.notas || '']; })) +
       '<h2 style="font-size:16px;margin:14px 0 6px">Medicamentos</h2>' +
@@ -705,6 +716,21 @@
       while (b && b !== this && !b.getAttribute('data-pick')) b = b.parentNode;
       if (!b || b === this) return;
       abrirSelector(b.getAttribute('data-pick'), b.getAttribute('data-target'), b.getAttribute('data-opc') === '1');
+    });
+    var cab = document.querySelector('.cab');
+    var der = document.createElement('div');
+    der.className = 'cab-der';
+    var ub = document.createElement('button');
+    ub.type = 'button'; ub.id = 'btnUnidad'; ub.className = 'unid';
+    ub.setAttribute('aria-label', 'Cambiar entre kilos y libras');
+    cab.appendChild(der); der.appendChild(ub); der.appendChild($('btnPdf'));
+    ub.addEventListener('click', function () {
+      estado.unidad = estado.unidad === 'kg' ? 'lb' : 'kg';
+      guardar(); render();
+    });
+    document.addEventListener('contextmenu', function (e) {
+      var t = e.target.tagName;
+      if (t !== 'INPUT' && t !== 'TEXTAREA') e.preventDefault();
     });
     $('btnPerfil').addEventListener('click', formPerfil);
     $('btnPdf').addEventListener('click', crearPDF);
