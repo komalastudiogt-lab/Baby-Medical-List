@@ -246,11 +246,74 @@
     $('cabEdad').textContent = e || (estado.perfil.nacimiento ? '' : 'Toca para agregar su nacimiento');
     var h = pestana === 'crecimiento' ? vistaCrecimiento() : (pestana === 'citas' ? vistaCitas() : vistaMedicinas());
     $('contenido').innerHTML = h;
+    var g = $('grafica');
+    g.hidden = pestana !== 'crecimiento';
+    if (!g.hidden) g.innerHTML = htmlGrafica();
     var tabs = document.querySelectorAll('.nav button');
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].className = tabs[i].getAttribute('data-tab') === pestana ? 'activo' : '';
     }
     $('fab').setAttribute('aria-label', pestana === 'crecimiento' ? 'Agregar medida' : (pestana === 'citas' ? 'Agregar cita' : 'Agregar medicamento'));
+  }
+
+  /* ---------- gráfica fija ---------- */
+  var metrica = 'peso';
+  function fmtCorta(s) { var p = parseF(s); return p ? p.d + ' ' + MESES[p.m - 1] + ' ' + String(p.y).slice(2) : ''; }
+  function chipGrafica(m, texto) {
+    return '<button type="button" class="g-chip' + (metrica === m ? ' act' : '') + '" data-m="' + m + '">' + texto + '</button>';
+  }
+  function htmlGrafica() {
+    var campo = metrica, unidad = campo === 'peso' ? 'kg' : 'cm', dec = campo === 'peso' ? 2 : 1;
+    var pts = estado.medidas.filter(function (m) { return m[campo] != null && dt(m.fecha); })
+      .sort(function (a, b) { return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
+    var color = campo === 'peso' ? '#E9779F' : '#5DAEDD';
+    var h = '<div class="g-cab"><div class="g-tabs">' + chipGrafica('peso', 'Peso') + chipGrafica('altura', 'Altura') + '</div>';
+    if (pts.length > 1) {
+      var d = pts[pts.length - 1][campo] - pts[0][campo];
+      h += '<span class="g-res">' + (d > 0 ? '+' : '') + fmtNum(d, dec) + ' ' + unidad + ' en total</span>';
+    }
+    h += '</div>';
+    if (!pts.length) return h + '<div class="g-vacio">Anota la primera medida para ver la gráfica.</div>';
+
+    var W = 320, H = 124, L = 34, R = 16, T = 16, B = 22, pw = W - L - R, ph = H - T - B, n = pts.length;
+    var vals = pts.map(function (p) { return p[campo]; });
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    var minimo = campo === 'peso' ? 0.2 : 1;
+    if (max - min < minimo) { var c = (max + min) / 2; min = c - minimo; max = c + minimo; }
+    else { var colchon = (max - min) * 0.12; min -= colchon; max += colchon; }
+    if (min < 0) min = 0;
+    var t0 = dt(pts[0].fecha).getTime(), t1 = dt(pts[n - 1].fecha).getTime();
+    function X(p) { return t1 === t0 ? L + pw / 2 : L + (dt(p.fecha).getTime() - t0) / (t1 - t0) * pw; }
+    function Y(v) { return T + ph - (v - min) / (max - min) * ph; }
+
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Gráfica de ' + campo + '">';
+    for (var i = 0; i < 3; i++) {
+      var gv = min + (max - min) * i / 2, gy = Y(gv).toFixed(1);
+      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="#F0E4EA" stroke-width="1"/>' +
+        '<text class="gtxt" x="' + (L - 4) + '" y="' + (+gy + 3) + '" text-anchor="end">' + fmtNum(gv, 1) + '</text>';
+    }
+    var xs = pts.map(function (p) { return X(p).toFixed(1); });
+    var ys = pts.map(function (p) { return Y(p[campo]).toFixed(1); });
+    if (n > 1) {
+      var base = (T + ph).toFixed(1), linea = '', area = 'M' + xs[0] + ',' + base;
+      for (var k = 0; k < n; k++) { linea += xs[k] + ',' + ys[k] + ' '; area += ' L' + xs[k] + ',' + ys[k]; }
+      area += ' L' + xs[n - 1] + ',' + base + ' Z';
+      s += '<path d="' + area + '" fill="' + color + '" opacity="0.15"/>' +
+        '<polyline points="' + linea + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    }
+    for (var j = 0; j < n; j++) {
+      s += '<circle cx="' + xs[j] + '" cy="' + ys[j] + '" r="3.8" fill="#fff" stroke="' + color + '" stroke-width="2"/>';
+      if (n <= 5 || j === 0 || j === n - 1) {
+        s += '<text class="gtxt val" x="' + xs[j] + '" y="' + (ys[j] - 8) + '" text-anchor="middle">' + fmtNum(vals[j], dec) + '</text>';
+      }
+    }
+    if (n > 1) {
+      s += '<text class="gtxt" x="' + L + '" y="' + (H - 6) + '" text-anchor="start">' + esc(fmtCorta(pts[0].fecha)) + '</text>' +
+        '<text class="gtxt" x="' + (W - R) + '" y="' + (H - 6) + '" text-anchor="end">' + esc(fmtCorta(pts[n - 1].fecha)) + '</text>';
+    } else {
+      s += '<text class="gtxt" x="' + (L + pw / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + esc(fmtCorta(pts[0].fecha)) + '</text>';
+    }
+    return h + s + '</svg>';
   }
 
   /* ---------- recordatorios ---------- */
@@ -305,6 +368,21 @@
     if (!v) return 'Sin hora';
     var p = String(v).split(':'), h = +p[0] || 0, m = +p[1] || 0;
     return ((h % 12) || 12) + ':' + pad(m) + (h >= 12 ? ' p. m.' : ' a. m.');
+  }
+  var LISTAS = {};
+  function campoLista(id, items, valor, titulo) {
+    var norm = items.map(function (x) { return typeof x === 'string' ? { v: x, t: x } : x; });
+    var txt = valor;
+    norm.forEach(function (x) { if (x.v === valor) txt = x.t; });
+    LISTAS[id] = { items: norm, titulo: titulo };
+    return '<input type="hidden" id="' + id + '" value="' + esc(valor) + '">' +
+      '<button type="button" class="sel con-flecha" id="' + id + '_b" data-pick="lista" data-target="' + id + '" data-opc="0">' + esc(txt) + '</button>';
+  }
+  function listaOpciones() {
+    var items = LISTAS[S.target].items;
+    return '<div class="lista">' + items.map(function (x) {
+      return '<button type="button" class="op' + (x.v === S.valor ? ' elegida' : '') + '" data-sel="op" data-v="' + esc(x.v) + '"><span>' + esc(x.t) + '</span><i class="radio"></i></button>';
+    }).join('') + '</div>';
   }
   function campoFecha(id, valor, opc) {
     return '<input type="hidden" id="' + id + '" value="' + esc(valor) + '">' +
@@ -361,13 +439,16 @@
     return Math.max(0, Math.min(max, Math.round($(id).scrollTop / ALTO)));
   }
   function pintarSelector() {
-    $('selCuerpo').innerHTML = S.tipo === 'fecha' ? calendario() : ruedas();
+    $('selCuerpo').innerHTML = S.tipo === 'lista' ? listaOpciones() : (S.tipo === 'fecha' ? calendario() : ruedas());
     if (S.tipo === 'hora') posicionarRuedas();
   }
   function abrirSelector(tipo, target, opc) {
     var v = $(target).value;
     S.tipo = tipo; S.target = target; S.opc = opc;
-    if (tipo === 'fecha') {
+    if (tipo === 'lista') {
+      S.valor = v;
+      $('selTitulo').textContent = LISTAS[target].titulo;
+    } else if (tipo === 'fecha') {
       var p = parseF(v) || parseF(hoyISO());
       S.y = p.y; S.m = p.m; S.fecha = v || '';
       $('selTitulo').textContent = 'Elige la fecha';
@@ -376,13 +457,22 @@
       S.h = +q[0] || 0; S.mi = +q[1] || 0;
       $('selTitulo').textContent = 'Elige la hora';
     }
-    $('selBorrar').hidden = !opc;
+    $('selBorrar').hidden = !opc || tipo === 'lista';
+    $('selOk').hidden = tipo === 'lista';
     $('selector').hidden = false;
     pintarSelector();
   }
   function cerrarSelector() { $('selector').hidden = true; }
   function accionSelector(a, v) {
     if (a === 'cancelar') { cerrarSelector(); return; }
+    if (a === 'op') {
+      var it = LISTAS[S.target].items, txt = v;
+      it.forEach(function (x) { if (x.v === v) txt = x.t; });
+      $(S.target).value = v;
+      $(S.target + '_b').textContent = txt;
+      cerrarSelector();
+      return;
+    }
     if (a === 'dia') { S.fecha = v; pintarSelector(); return; }
     if (a === 'mes-') { S.m--; if (S.m < 1) { S.m = 12; S.y--; } pintarSelector(); return; }
     if (a === 'mes+') { S.m++; if (S.m > 12) { S.m = 1; S.y++; } pintarSelector(); return; }
@@ -439,12 +529,12 @@
 
   function formCita(id) {
     var c = id ? buscar(estado.citas, id) : null;
-    var h = '<label>Tipo<select id="f_tipo">' + opciones(TIPOS, c ? c.tipo : 'Pediatra') + '</select></label>' +
+    var h = '<label>Tipo' + campoLista('f_tipo', TIPOS, c ? c.tipo : 'Pediatra', 'Tipo de cita') + '</label>' +
       '<label>Detalle (opcional, ej. nombre de la vacuna)<input type="text" id="f_motivo" maxlength="60" value="' + esc(c ? c.motivo : '') + '"></label>' +
       '<div class="dos"><label>Fecha' + campoFecha('f_fecha', c ? c.fecha : hoyISO(), false) + '</label>' +
       '<label>Hora' + campoHora('f_hora', c ? (c.hora || '') : '09:00', true) + '</label></div>' +
       '<label>Lugar (opcional)<input type="text" id="f_lugar" maxlength="60" value="' + esc(c ? c.lugar : '') + '"></label>' +
-      '<label>Recordatorio<select id="f_aviso">' + opciones(AVISOS, c ? c.aviso : '1440') + '</select></label>' +
+      '<label>Recordatorio' + campoLista('f_aviso', AVISOS, c ? c.aviso : '1440', 'Recordatorio') + '</label>' +
       '<label>Notas (opcional)<textarea id="f_notas" maxlength="300">' + esc(c ? c.notas : '') + '</textarea></label>';
     abrirModal(c ? 'Editar cita' : 'Nueva cita', h, 'Guardar', function () {
       var fecha = $('f_fecha').value, hora = $('f_hora').value, aviso = $('f_aviso').value;
@@ -586,12 +676,22 @@
       else if (pestana === 'citas') formCita(0);
       else formMed(0);
     });
+    var gEl = document.createElement('section');
+    gEl.id = 'grafica'; gEl.className = 'grafica'; gEl.hidden = true;
+    document.body.insertBefore(gEl, $('contenido'));
+    gEl.addEventListener('click', function (e) {
+      var b = e.target;
+      while (b && b !== this && !b.getAttribute('data-m')) b = b.parentNode;
+      if (!b || b === this) return;
+      metrica = b.getAttribute('data-m');
+      render();
+    });
     var selEl = document.createElement('div');
     selEl.id = 'selector'; selEl.className = 'selector'; selEl.hidden = true;
     selEl.innerHTML = '<div class="sel-hoja"><h3 id="selTitulo"></h3><div id="selCuerpo"></div><div class="botones">' +
       '<button id="selBorrar" class="sec" type="button" data-sel="borrar">Borrar</button>' +
       '<button class="sec" type="button" data-sel="cancelar">Cancelar</button>' +
-      '<button class="pri" type="button" data-sel="ok">Establecer</button></div></div>';
+      '<button id="selOk" class="pri" type="button" data-sel="ok">Establecer</button></div></div>';
     document.body.appendChild(selEl);
     selEl.addEventListener('click', function (e) {
       if (e.target === this) { cerrarSelector(); return; }
