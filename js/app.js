@@ -4,7 +4,7 @@
   var KEY = 'bml_data';
   var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   var TIPOS = ['Vacuna', 'Pediatra', 'Control de peso y talla', 'Análisis', 'Otro'];
-  var CLASE_TIPO = { 'Vacuna': 'c-menta', 'Pediatra': 'c-rosa', 'Control de peso y talla': 'c-amarillo', 'Análisis': 'c-lila', 'Otro': 'c-durazno' };
+  var CLASE_TIPO = { 'Vacuna': 'c-menta', 'Pediatra': 'c-rosa', 'Control de peso y talla': 'c-amarillo', 'Análisis': 'c-celeste', 'Otro': 'c-lila' };
   var AVISOS = [
     { v: 'no', t: 'Sin aviso' },
     { v: '0', t: 'A la hora de la cita' },
@@ -192,30 +192,75 @@
     return h;
   }
 
-  function tarjetaCita(c, pasada) {
-    var t = dt(c.fecha, c.hora);
+  function claveCita(c) { return c.fecha + ' ' + (c.hora || '00:00'); }
+  function isoDe(ms) { var d = new Date(ms); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function lineaCita(c) {
+    return esc(fmtF(c.fecha)) + (c.hora ? ', ' + esc(fmtHora12(c.hora)) : '') + (c.lugar ? ' · ' + esc(c.lugar) : '');
+  }
+
+  function tarjetaCita(c) {
     var av = '';
     for (var i = 0; i < AVISOS.length; i++) { if (AVISOS[i].v === c.aviso && c.aviso !== 'no') av = AVISOS[i].t; }
-    return '<div class="tarjeta ' + (CLASE_TIPO[c.tipo] || 'c-durazno') + (pasada ? ' pasada' : '') + '">' +
-      '<div class="fila"><span class="titulo">' + esc(c.tipo) + (c.motivo ? ' · ' + esc(c.motivo) : '') + '</span>' +
-      (c.hecha ? '<span class="chip">Hecha</span>' : '') + '</div>' +
-      '<div class="sub">' + esc(fmtF(c.fecha)) + (c.hora ? ', ' + esc(fmtHora12(c.hora)) : '') + (c.lugar ? ' · ' + esc(c.lugar) : '') + '</div>' +
+    return '<div class="desliza"><div class="acc-atras">' +
+      '<button type="button" class="ed" data-acc="ed-cita" data-id="' + c.id + '">' + ICO.edit + 'Editar</button>' +
+      '<button type="button" class="el" data-acc="del-cita" data-id="' + c.id + '">' + ICO.del + 'Eliminar</button></div>' +
+      '<div class="tarjeta ' + (CLASE_TIPO[c.tipo] || 'c-lila') + '" data-sw="1">' +
+      '<div class="fila"><span class="titulo">' + esc(c.tipo) + (c.motivo ? ' · ' + esc(c.motivo) : '') + '</span></div>' +
+      '<div class="sub">' + lineaCita(c) + '</div>' +
       (av ? '<div class="sub">Aviso: ' + esc(av) + '</div>' : '') +
       (c.notas ? '<p class="nota">' + esc(c.notas) + '</p>' : '') +
-      '<div class="acciones">' +
-      btn('hecha-cita', c.id, ICO.ok, c.hecha ? 'Reabrir' : 'Marcar hecha', c.hecha ? '' : 'fuerte') +
-      btn('ed-cita', c.id, ICO.edit, 'Editar') + btn('del-cita', c.id, ICO.del, 'Eliminar') + '</div></div>';
+      '<div class="acciones">' + btn('hecha-cita', c.id, ICO.ok, 'Marcar hecha', 'fuerte') + '</div></div></div>';
   }
   function vistaCitas() {
-    if (!estado.citas.length) return vacio('Sin citas anotadas', 'Toca + para agregar vacunas, visitas al pediatra y más.');
+    var hechas = estado.citas.filter(function (c) { return c.hecha; }).length;
+    var h = '<button type="button" class="hist-btn" data-acc="hist-citas">' + ICO.hist + '<span>Historial de citas</span><span class="chip">' + hechas + '</span></button>';
+    var pend = estado.citas.filter(function (c) { return !c.hecha; });
+    if (!pend.length) return h + vacio('Sin citas pendientes', 'Toca + para agregar vacunas, visitas al pediatra y más.');
     var hoy = hoyISO();
-    function clave(c) { return c.fecha + ' ' + (c.hora || '00:00'); }
-    var prox = estado.citas.filter(function (c) { return !c.hecha && c.fecha >= hoy; }).sort(function (a, b) { return clave(a) < clave(b) ? -1 : 1; });
-    var pas = estado.citas.filter(function (c) { return c.hecha || c.fecha < hoy; }).sort(function (a, b) { return clave(a) < clave(b) ? 1 : -1; });
-    var h = '';
-    if (prox.length) { h += '<div class="seccion">Próximas</div>'; prox.forEach(function (c) { h += tarjetaCita(c, false); }); }
-    if (pas.length) { h += '<div class="seccion">Pasadas y hechas</div>'; pas.forEach(function (c) { h += tarjetaCita(c, true); }); }
-    return h;
+    var prox = pend.filter(function (c) { return c.fecha >= hoy; }).sort(function (a, b) { return claveCita(a) < claveCita(b) ? -1 : 1; });
+    var venc = pend.filter(function (c) { return c.fecha < hoy; }).sort(function (a, b) { return claveCita(a) < claveCita(b) ? -1 : 1; });
+    if (prox.length) { h += '<div class="seccion">Próximas</div>'; prox.forEach(function (c) { h += tarjetaCita(c); }); }
+    if (venc.length) { h += '<div class="seccion">Vencidas sin marcar</div>'; venc.forEach(function (c) { h += tarjetaCita(c); }); }
+    return h + '<p class="aviso">Desliza una cita hacia la izquierda para editarla o eliminarla.</p>';
+  }
+
+  /* ---------- historial de citas hechas ---------- */
+  var histCitas = false;
+  var swAbierto = null;
+  function cerrarSwipe() {
+    if (swAbierto) { swAbierto.style.transform = ''; swAbierto = null; }
+  }
+  function abrirHistCitas() { histCitas = true; $('hcitas').hidden = false; $('hcitas').innerHTML = ''; pintarHistCitas(); }
+  function cerrarHistCitas() { histCitas = false; $('hcitas').hidden = true; }
+  function tarjetaHecha(c) {
+    return '<div class="tarjeta ' + (CLASE_TIPO[c.tipo] || 'c-lila') + '">' +
+      '<div class="fila"><span class="titulo">' + esc(c.motivo || c.tipo) + '</span></div>' +
+      '<div class="sub">' + lineaCita(c) + '</div>' +
+      (c.hechaEn ? '<div class="sub">Marcada como hecha el ' + esc(fmtF(isoDe(c.hechaEn))) + '</div>' : '') +
+      (c.notas ? '<p class="nota">' + esc(c.notas) + '</p>' : '') +
+      '<div class="acciones">' + btn('reabrir-cita', c.id, ICO.play, 'Reabrir') + btn('del-cita', c.id, ICO.del, 'Eliminar') + '</div></div>';
+  }
+  function pintarHistCitas() {
+    var el = $('hcitas'), prev = el.querySelector('.det-cuerpo'), y = prev ? prev.scrollTop : 0;
+    var hechas = estado.citas.filter(function (c) { return c.hecha; });
+    var cuerpo = '';
+    if (!hechas.length) {
+      cuerpo = vacio('Aún no hay citas hechas', 'Cuando marques una cita como hecha, se guardará aquí.');
+    } else {
+      TIPOS.forEach(function (tipo) {
+        var g = hechas.filter(function (c) { return c.tipo === tipo; }).sort(function (a, b) {
+          return (b.hechaEn || (dt(b.fecha, b.hora || '00:00') || 0).valueOf()) - (a.hechaEn || (dt(a.fecha, a.hora || '00:00') || 0).valueOf());
+        });
+        if (!g.length) return;
+        cuerpo += '<div class="grupo-cab"><span class="titulo">' + esc(tipo) + '</span><span class="chip">' + g.length + '</span></div>';
+        g.forEach(function (c) { cuerpo += tarjetaHecha(c); });
+      });
+    }
+    el.innerHTML = '<div class="det-cab"><button type="button" class="icbtn" data-acc="cerrar-hc" aria-label="Volver">' + ICO.atras + '</button>' +
+      '<div class="det-tit"><div class="titulo">Historial de citas</div><div class="sub">' + hechas.length + (hechas.length === 1 ? ' cita hecha' : ' citas hechas') + ' · por tipo</div></div></div>' +
+      '<div class="det-cuerpo">' + cuerpo + '</div>';
+    var cp = el.querySelector('.det-cuerpo');
+    if (cp) cp.scrollTop = y;
   }
 
   function proxima(m) {
@@ -365,6 +410,7 @@
     var ub = $('btnUnidad');
     if (ub) ub.innerHTML = '<span class="u' + (estado.unidad === 'kg' ? ' act' : '') + '">kg</span><span class="u' + (estado.unidad === 'lb' ? ' act' : '') + '">lb</span>';
     var h = pestana === 'crecimiento' ? vistaCrecimiento() : (pestana === 'citas' ? vistaCitas() : vistaMedicinas());
+    swAbierto = null;
     $('contenido').innerHTML = h;
     var g = $('grafica');
     g.hidden = pestana !== 'crecimiento';
@@ -374,6 +420,7 @@
       tabs[i].className = tabs[i].getAttribute('data-tab') === pestana ? 'activo' : '';
     }
     if (detalleId !== null) pintarDetalle();
+    if (histCitas) pintarHistCitas();
     $('fab').setAttribute('aria-label', pestana === 'crecimiento' ? 'Agregar medida' : (pestana === 'citas' ? 'Agregar cita' : 'Agregar medicamento'));
   }
 
@@ -389,7 +436,7 @@
     var pts = estado.medidas.filter(function (m) { return m[campo] != null && dt(m.fecha); })
       .sort(function (a, b) { return a.fecha < b.fecha ? -1 : (a.fecha > b.fecha ? 1 : 0); });
     var vals = pts.map(function (p) { return esPeso ? aUnidad(p.peso) : p.altura; });
-    var color = esPeso ? '#E9779F' : '#5DAEDD';
+    var color = esPeso ? '#ED6956' : '#7C9DBB';
     var h = '<div class="g-cab"><div class="g-tabs">' + chipGrafica('peso', 'Peso') + chipGrafica('altura', 'Altura') + '</div>';
     if (pts.length > 1) {
       var d = vals[vals.length - 1] - vals[0];
@@ -412,7 +459,7 @@
     var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Gráfica de ' + campo + '">';
     for (var i = 0; i < 3; i++) {
       var gv = min + (max - min) * i / 2, gy = Y(gv).toFixed(1);
-      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="#EDE3E8" stroke-width="1"/>' +
+      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '" stroke="#F2DDE0" stroke-width="1"/>' +
         '<text class="gtxt" x="' + (L - 5) + '" y="' + (+gy + 4) + '" text-anchor="end">' + fmtNum(gv, 1) + '</text>';
     }
     var xs = pts.map(function (p) { return X(p).toFixed(1); });
@@ -706,7 +753,16 @@
     else if (a === 'del-medida') confirmar('¿Eliminar esta medida?', function () { estado.medidas = quitar(estado.medidas, id); guardar(); render(); });
     else if (a === 'ed-cita') formCita(id);
     else if (a === 'del-cita') confirmar('¿Eliminar esta cita?', function () { estado.citas = quitar(estado.citas, id); guardar(); render(); reprogramar(false); });
-    else if (a === 'hecha-cita') { o = buscar(estado.citas, id); if (o) { o.hecha = !o.hecha; guardar(); render(); reprogramar(false); } }
+    else if (a === 'hecha-cita') {
+      o = buscar(estado.citas, id);
+      if (o) { o.hecha = true; o.hechaEn = Date.now(); guardar(); render(); reprogramar(false); toast('Cita guardada en el historial'); }
+    }
+    else if (a === 'reabrir-cita') {
+      o = buscar(estado.citas, id);
+      if (o) { o.hecha = false; delete o.hechaEn; guardar(); render(); reprogramar(false); toast('La cita volvió a pendientes'); }
+    }
+    else if (a === 'hist-citas') abrirHistCitas();
+    else if (a === 'cerrar-hc') cerrarHistCitas();
     else if (a === 'ed-med') formMed(id);
     else if (a === 'del-med') confirmar('¿Eliminar este medicamento y su historial?', function () { cerrarDetalle(); estado.meds = quitar(estado.meds, id); guardar(); render(); reprogramar(false); });
     else if (a === 'hist-med') abrirDetalle(id);
@@ -734,11 +790,11 @@
   function tabla(cab, filas) {
     if (!filas.length) return '<p style="color:#7A7288">Sin registros.</p>';
     var h = '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr>';
-    cab.forEach(function (c) { h += '<th style="text-align:left;background:#E8DFF7;padding:6px;border:1px solid #F0E4EA">' + esc(c) + '</th>'; });
+    cab.forEach(function (c) { h += '<th style="text-align:left;background:#F3A9B0;padding:6px;border:1px solid #F2DDE0">' + esc(c) + '</th>'; });
     h += '</tr>';
     filas.forEach(function (f) {
       h += '<tr>';
-      f.forEach(function (c) { h += '<td style="padding:6px;border:1px solid #F0E4EA;vertical-align:top">' + esc(c) + '</td>'; });
+      f.forEach(function (c) { h += '<td style="padding:6px;border:1px solid #F2DDE0;vertical-align:top">' + esc(c) + '</td>'; });
       h += '</tr>';
     });
     return h + '</table>';
@@ -799,6 +855,7 @@
       });
     }
     var clicAcc = function (e) {
+      if (swAbierto && !e.target.closest('.acc-atras')) { cerrarSwipe(); return; }
       var b = e.target;
       while (b && b !== this && !b.getAttribute('data-acc')) b = b.parentNode;
       if (!b || b === this) return;
@@ -810,6 +867,46 @@
       else if (pestana === 'citas') formCita(0);
       else formMed(0);
     });
+    var hcEl = document.createElement('section');
+    hcEl.id = 'hcitas'; hcEl.className = 'detalle'; hcEl.hidden = true;
+    document.body.appendChild(hcEl);
+    hcEl.addEventListener('click', clicAcc);
+
+    var ANCHO_SW = 156, sw = { card: null, x0: 0, y0: 0, dir: '', base: 0, x: 0 };
+    var cont = $('contenido');
+    cont.addEventListener('touchstart', function (e) {
+      if (e.target.closest('.acc-atras')) return;
+      var card = e.target.closest('[data-sw]');
+      if (!card) { cerrarSwipe(); return; }
+      if (swAbierto && swAbierto !== card) cerrarSwipe();
+      var t = e.touches[0];
+      sw.card = card; sw.x0 = t.clientX; sw.y0 = t.clientY; sw.dir = '';
+      sw.base = swAbierto === card ? -ANCHO_SW : 0; sw.x = sw.base;
+      card.style.transition = 'none';
+    }, { passive: true });
+    cont.addEventListener('touchmove', function (e) {
+      if (!sw.card) return;
+      var t = e.touches[0], dx = t.clientX - sw.x0, dy = t.clientY - sw.y0;
+      if (!sw.dir && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) sw.dir = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      if (sw.dir === 'h') {
+        sw.x = Math.max(-ANCHO_SW, Math.min(0, sw.base + dx));
+        sw.card.style.transform = 'translateX(' + sw.x + 'px)';
+      }
+    }, { passive: true });
+    function finSwipe() {
+      var c = sw.card;
+      if (!c) return;
+      c.style.transition = '';
+      if (sw.dir === 'h') {
+        var abre = sw.x < -ANCHO_SW / 2;
+        c.style.transform = abre ? 'translateX(-' + ANCHO_SW + 'px)' : '';
+        swAbierto = abre ? c : null;
+      }
+      sw.card = null;
+    }
+    cont.addEventListener('touchend', finSwipe);
+    cont.addEventListener('touchcancel', finSwipe);
+
     var detEl = document.createElement('section');
     detEl.id = 'detalle'; detEl.className = 'detalle'; detEl.hidden = true;
     document.body.appendChild(detEl);
