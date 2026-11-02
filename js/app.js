@@ -23,6 +23,8 @@
     ok: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>',
     pausa: '<svg viewBox="0 0 24 24"><path d="M9 6v12M15 6v12"/></svg>',
     play: '<svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>',
+    atras: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+    hist: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
     bebe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="11" r=".6"/><circle cx="15" cy="11" r=".6"/><path d="M9.5 15c1.4 1 3.6 1 5 0M12 4c1-1.5 2.5-1.5 3 0"/></svg>'
   };
 
@@ -92,7 +94,7 @@
   }
   function fmtDT(ms) {
     var d = new Date(ms);
-    return d.getDate() + ' ' + MESES[d.getMonth()] + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return d.getDate() + ' ' + MESES[d.getMonth()] + ', ' + horaMs(ms);
   }
   function diasMes(y, m) { return new Date(y, m, 0).getDate(); }
   function edadEn(fecha) {
@@ -197,7 +199,7 @@
     return '<div class="tarjeta ' + (CLASE_TIPO[c.tipo] || 'c-durazno') + (pasada ? ' pasada' : '') + '">' +
       '<div class="fila"><span class="titulo">' + esc(c.tipo) + (c.motivo ? ' · ' + esc(c.motivo) : '') + '</span>' +
       (c.hecha ? '<span class="chip">Hecha</span>' : '') + '</div>' +
-      '<div class="sub">' + esc(fmtF(c.fecha)) + (c.hora ? ', ' + esc(c.hora) : '') + (c.lugar ? ' · ' + esc(c.lugar) : '') + '</div>' +
+      '<div class="sub">' + esc(fmtF(c.fecha)) + (c.hora ? ', ' + esc(fmtHora12(c.hora)) : '') + (c.lugar ? ' · ' + esc(c.lugar) : '') + '</div>' +
       (av ? '<div class="sub">Aviso: ' + esc(av) + '</div>' : '') +
       (c.notas ? '<p class="nota">' + esc(c.notas) + '</p>' : '') +
       '<div class="acciones">' +
@@ -225,25 +227,135 @@
     if (t < ahora) t = t0 + Math.ceil((ahora - t0) / iv) * iv;
     return t < fin ? t : null;
   }
+  function horaMs(ms) {
+    var d = new Date(ms);
+    return fmtHora12(pad(d.getHours()) + ':' + pad(d.getMinutes()));
+  }
+  function mismoDia(a, b) {
+    var x = new Date(a), y = new Date(b);
+    return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
+  }
+  function difDias(ms) {
+    var d = new Date(ms), h = new Date();
+    var a = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    var b = new Date(h.getFullYear(), h.getMonth(), h.getDate()).getTime();
+    return Math.round((a - b) / 86400000);
+  }
+  function fmtDia(ms) {
+    var x = difDias(ms);
+    if (x === 0) return 'hoy';
+    if (x === 1) return 'mañana';
+    if (x === -1) return 'ayer';
+    var d = new Date(ms);
+    return d.getDate() + ' ' + MESES[d.getMonth()];
+  }
+  function diaTitulo(ms) {
+    var x = difDias(ms);
+    if (x === 0) return 'Hoy';
+    if (x === -1) return 'Ayer';
+    var d = new Date(ms);
+    return d.getDate() + ' ' + MESES[d.getMonth()] + ' ' + d.getFullYear();
+  }
+  function cuando(ms, ref) { return mismoDia(ms, ref) ? horaMs(ms) : fmtDia(ms) + ' ' + horaMs(ms); }
+  function fmtDur(min) {
+    if (min < 60) return min + ' min';
+    var h = Math.floor(min / 60), r = min % 60;
+    return r ? h + ' h ' + r + ' min' : h + ' h';
+  }
+  function normDosis(x) { return typeof x === 'number' ? { t: x, p: null } : x; }
+  function programadaCerca(m, t) {
+    var d0 = dt(m.inicio, m.hora);
+    if (!d0 || !(m.cada > 0)) return null;
+    var t0 = d0.getTime(), iv = m.cada * 3600000;
+    var k = Math.round((t - t0) / iv);
+    if (k < 0) k = 0;
+    var p = t0 + k * iv;
+    if (m.dias > 0 && p >= t0 + m.dias * 86400000) return null;
+    return p;
+  }
+  function diffDosis(t, p) {
+    if (p == null) return { txt: '', cls: '' };
+    var d = Math.round((t - p) / 60000);
+    if (Math.abs(d) <= 10) return { txt: 'A tiempo', cls: 'ok' };
+    return d > 0 ? { txt: fmtDur(d) + ' tarde', cls: 'tarde' } : { txt: fmtDur(-d) + ' antes', cls: 'antes' };
+  }
+  function ultimaDosis(m) {
+    var u = null;
+    (m.registro || []).forEach(function (r) {
+      var x = normDosis(r);
+      if (!u || x.t > u.t) u = x;
+    });
+    return u;
+  }
+  function textoEstado(m) {
+    if (!m.activo) return 'En pausa';
+    var p = proxima(m);
+    return p ? 'Próxima ' + fmtDia(p) + ' ' + horaMs(p) : 'Terminado';
+  }
+
   function vistaMedicinas() {
     if (!estado.meds.length) return vacio('Sin medicamentos', 'Toca + para agregar uno con su dosis y horario.') + '<p class="aviso">Anota solo lo que indique el pediatra.</p>';
     var h = '';
     estado.meds.forEach(function (m) {
-      var p = proxima(m), ult = m.registro && m.registro.length ? m.registro[m.registro.length - 1] : null;
-      var estadoTxt = !m.activo ? 'En pausa' : (p ? 'Próxima dosis: ' + fmtDT(p) : 'Tratamiento terminado');
-      h += '<div class="tarjeta c-lila' + (m.activo ? '' : ' pasada') + '">' +
-        '<div class="fila"><span class="titulo">' + esc(m.nombre) + '</span><span class="chip">cada ' + esc(fmtNum(m.cada, 1)) + ' h</span></div>' +
-        '<div class="sub">Dosis: ' + esc(m.dosis) + '</div>' +
-        '<div class="sub">Inicio: ' + esc(fmtF(m.inicio)) + ', ' + esc(m.hora) + (m.dias > 0 ? ' · ' + esc(m.dias) + ' días' : ' · sin fecha de fin') + '</div>' +
-        '<div class="titulo" style="margin-top:6px">' + esc(estadoTxt) + '</div>' +
-        (ult ? '<div class="sub">Última dosis dada: ' + esc(fmtDT(ult)) + '</div>' : '') +
-        (m.notas ? '<p class="nota">' + esc(m.notas) + '</p>' : '') +
-        '<div class="acciones">' +
-        btn('dada-med', m.id, ICO.ok, 'Dada ahora', 'fuerte') +
-        btn('pausa-med', m.id, m.activo ? ICO.pausa : ICO.play, m.activo ? 'Pausar' : 'Activar') +
-        btn('ed-med', m.id, ICO.edit, 'Editar') + btn('del-med', m.id, ICO.del, 'Eliminar') + '</div></div>';
+      var ult = ultimaDosis(m);
+      h += '<div class="tarjeta c-lila med' + (m.activo ? '' : ' pasada') + '">' +
+        '<div class="fila"><span class="titulo">' + esc(m.nombre) + '</span><span class="chip est">' + esc(textoEstado(m)) + '</span></div>' +
+        '<div class="med-res">' + esc(m.dosis) + ' · cada ' + esc(fmtNum(m.cada, 1)) + ' h</div>' +
+        '<div class="sub">' + (ult ? 'Última: ' + esc(fmtDia(ult.t) + ' ' + horaMs(ult.t)) : 'Aún sin dosis registradas') + '</div>' +
+        (m.notas ? '<div class="nota-1">' + esc(m.notas) + '</div>' : '') +
+        '<div class="acciones">' + btn('dada-med', m.id, ICO.ok, 'Dada ahora', 'fuerte grande') + btn('hist-med', m.id, ICO.hist, 'Historial', 'grande') + '</div></div>';
     });
     return h + '<p class="aviso">Anota solo lo que indique el pediatra. La app no calcula dosis.</p>';
+  }
+
+  /* ---------- pantalla de historial de dosis ---------- */
+  var detalleId = null;
+  function abrirDetalle(id) {
+    detalleId = id;
+    $('detalle').hidden = false;
+    $('detalle').innerHTML = '';
+    pintarDetalle();
+  }
+  function cerrarDetalle() {
+    detalleId = null;
+    $('detalle').hidden = true;
+  }
+  function pintarDetalle() {
+    var m = detalleId === null ? null : buscar(estado.meds, detalleId);
+    if (!m) { cerrarDetalle(); return; }
+    var el = $('detalle'), prev = el.querySelector('.det-cuerpo'), y = prev ? prev.scrollTop : 0;
+    var d0 = dt(m.inicio, m.hora), t0 = d0 ? d0.getTime() : 0;
+    var fin = m.dias > 0 && t0 ? 'Termina: ' + fmtDT(t0 + m.dias * 86400000) : 'Sin fecha de fin';
+    var lista = (m.registro || []).map(function (r, i) {
+      var x = normDosis(r);
+      return { t: x.t, p: x.p == null ? programadaCerca(m, x.t) : x.p, i: i };
+    }).sort(function (a, b) { return b.t - a.t; });
+    var filas = '', diaPrev = '';
+    lista.forEach(function (x) {
+      var dia = diaTitulo(x.t);
+      if (dia !== diaPrev) { filas += '<div class="seccion">' + esc(dia) + '</div>'; diaPrev = dia; }
+      var df = diffDosis(x.t, x.p);
+      filas += '<div class="dosis"><div class="info"><div class="hora">Dada ' + esc(horaMs(x.t)) + '</div>' +
+        (x.p != null ? '<div class="sub">Le tocaba ' + esc(cuando(x.p, x.t)) + '</div>' : '') + '</div>' +
+        (df.txt ? '<span class="chip ' + df.cls + '">' + esc(df.txt) + '</span>' : '') +
+        '<button type="button" class="mini" aria-label="Quitar este registro" data-acc="del-dosis" data-id="' + m.id + '" data-i="' + x.i + '">' + ICO.del + '</button></div>';
+    });
+    if (!lista.length) filas = vacio('Aún no hay dosis', 'Toca "Registrar dosis ahora" cuando se la des.');
+    el.innerHTML =
+      '<div class="det-cab"><button type="button" class="icbtn" data-acc="cerrar-det" aria-label="Volver">' + ICO.atras + '</button>' +
+      '<div class="det-tit"><div class="titulo">' + esc(m.nombre) + '</div><div class="sub">' + esc(m.dosis) + ' · cada ' + esc(fmtNum(m.cada, 1)) + ' h</div></div></div>' +
+      '<div class="det-cuerpo"><div class="tarjeta c-lila med">' +
+      '<div class="fila"><span class="titulo">' + esc(textoEstado(m)) + '</span></div>' +
+      '<div class="sub">Inicio: ' + esc(fmtF(m.inicio)) + ', ' + esc(fmtHora12(m.hora)) + '</div>' +
+      '<div class="sub">' + esc(fin) + '</div>' +
+      (m.notas ? '<p class="nota">' + esc(m.notas) + '</p>' : '') +
+      '<div class="acciones">' + btn('ed-med', m.id, ICO.edit, 'Editar') +
+      btn('pausa-med', m.id, m.activo ? ICO.pausa : ICO.play, m.activo ? 'Pausar' : 'Activar') +
+      btn('del-med', m.id, ICO.del, 'Eliminar') + '</div></div>' +
+      '<div class="seccion">Dosis registradas (' + lista.length + ')</div>' + filas + '</div>' +
+      '<div class="det-pie"><button type="button" class="pri" data-acc="dada-med" data-id="' + m.id + '">Registrar dosis ahora</button></div>';
+    var cp = el.querySelector('.det-cuerpo');
+    if (cp) cp.scrollTop = y;
   }
 
   function render() {
@@ -261,6 +373,7 @@
     for (var i = 0; i < tabs.length; i++) {
       tabs[i].className = tabs[i].getAttribute('data-tab') === pestana ? 'activo' : '';
     }
+    if (detalleId !== null) pintarDetalle();
     $('fab').setAttribute('aria-label', pestana === 'crecimiento' ? 'Agregar medida' : (pestana === 'citas' ? 'Agregar cita' : 'Agregar medicamento'));
   }
 
@@ -340,7 +453,7 @@
       if (!t) return;
       var ms = t.getTime() - (parseInt(c.aviso, 10) || 0) * 60000;
       if (ms > ahora + 5000) {
-        lista.push({ id: 1000000000 + c.id, title: 'Cita: ' + c.tipo, body: quien + ' · ' + fmtF(c.fecha) + (c.hora ? ', ' + c.hora : '') + (c.lugar ? ' · ' + c.lugar : ''), at: ms });
+        lista.push({ id: 1000000000 + c.id, title: 'Cita: ' + c.tipo, body: quien + ' · ' + fmtF(c.fecha) + (c.hora ? ', ' + fmtHora12(c.hora) : '') + (c.lugar ? ' · ' + c.lugar : ''), at: ms });
       }
     });
     estado.meds.forEach(function (m) {
@@ -587,7 +700,7 @@
   }
 
   /* ---------- acciones ---------- */
-  function accion(a, id) {
+  function accion(a, id, idx) {
     var o;
     if (a === 'ed-medida') formMedida(id);
     else if (a === 'del-medida') confirmar('¿Eliminar esta medida?', function () { estado.medidas = quitar(estado.medidas, id); guardar(); render(); });
@@ -595,14 +708,23 @@
     else if (a === 'del-cita') confirmar('¿Eliminar esta cita?', function () { estado.citas = quitar(estado.citas, id); guardar(); render(); reprogramar(false); });
     else if (a === 'hecha-cita') { o = buscar(estado.citas, id); if (o) { o.hecha = !o.hecha; guardar(); render(); reprogramar(false); } }
     else if (a === 'ed-med') formMed(id);
-    else if (a === 'del-med') confirmar('¿Eliminar este medicamento?', function () { estado.meds = quitar(estado.meds, id); guardar(); render(); reprogramar(false); });
+    else if (a === 'del-med') confirmar('¿Eliminar este medicamento y su historial?', function () { cerrarDetalle(); estado.meds = quitar(estado.meds, id); guardar(); render(); reprogramar(false); });
+    else if (a === 'hist-med') abrirDetalle(id);
+    else if (a === 'cerrar-det') cerrarDetalle();
+    else if (a === 'del-dosis') {
+      confirmar('¿Quitar este registro de dosis?', function () {
+        var q = buscar(estado.meds, id);
+        if (q && q.registro && idx >= 0 && idx < q.registro.length) { q.registro.splice(idx, 1); guardar(); render(); }
+      });
+    }
     else if (a === 'pausa-med') { o = buscar(estado.meds, id); if (o) { o.activo = !o.activo; guardar(); render(); reprogramar(o.activo); } }
     else if (a === 'dada-med') {
       o = buscar(estado.meds, id);
       if (o) {
         if (!o.registro) o.registro = [];
-        o.registro.push(Date.now());
-        if (o.registro.length > 30) o.registro.shift();
+        var ahoraT = Date.now();
+        o.registro.push({ t: ahoraT, p: programadaCerca(o, ahoraT) });
+        while (o.registro.length > 300) o.registro.shift();
         guardar(); render(); toast('Dosis registrada');
       }
     }
@@ -633,9 +755,9 @@
       '<h2 style="font-size:16px;margin:14px 0 6px">Crecimiento</h2>' +
       tabla(['Fecha', 'Edad', 'Peso (' + estado.unidad + ')', 'Altura (cm)', 'Notas'], med.map(function (m) { return [fmtF(m.fecha), edadEn(m.fecha), m.peso != null ? fmtNum(aUnidad(m.peso), decPeso()) : '—', m.altura != null ? fmtNum(m.altura, 1) : '—', m.notas || '']; })) +
       '<h2 style="font-size:16px;margin:14px 0 6px">Citas</h2>' +
-      tabla(['Fecha', 'Tipo', 'Lugar', 'Estado', 'Notas'], cit.map(function (c) { return [fmtF(c.fecha) + (c.hora ? ' ' + c.hora : ''), c.tipo + (c.motivo ? ' · ' + c.motivo : ''), c.lugar || '', c.hecha ? 'Hecha' : 'Pendiente', c.notas || '']; })) +
+      tabla(['Fecha', 'Tipo', 'Lugar', 'Estado', 'Notas'], cit.map(function (c) { return [fmtF(c.fecha) + (c.hora ? ' ' + fmtHora12(c.hora) : ''), c.tipo + (c.motivo ? ' · ' + c.motivo : ''), c.lugar || '', c.hecha ? 'Hecha' : 'Pendiente', c.notas || '']; })) +
       '<h2 style="font-size:16px;margin:14px 0 6px">Medicamentos</h2>' +
-      tabla(['Medicamento', 'Dosis', 'Cada', 'Inicio', 'Duración', 'Notas'], estado.meds.map(function (m) { return [m.nombre, m.dosis, fmtNum(m.cada, 1) + ' h', fmtF(m.inicio) + ' ' + m.hora, m.dias > 0 ? m.dias + ' días' : 'Sin fecha de fin', m.notas || '']; })) +
+      tabla(['Medicamento', 'Dosis', 'Cada', 'Inicio', 'Duración', 'Notas'], estado.meds.map(function (m) { return [m.nombre, m.dosis, fmtNum(m.cada, 1) + ' h', fmtF(m.inicio) + ' ' + fmtHora12(m.hora), m.dias > 0 ? m.dias + ' días' : 'Sin fecha de fin', m.notas || '']; })) +
       '<p style="font-size:11px;color:#7A7288;margin-top:16px">Registro llevado por la familia. No sustituye las indicaciones del pediatra.</p></div>';
     var cont = document.createElement('div');
     cont.style.cssText = 'position:absolute;left:0;top:0;z-index:-1;background:#fff';
@@ -676,17 +798,22 @@
         $('contenido').scrollTop = 0;
       });
     }
-    $('contenido').addEventListener('click', function (e) {
+    var clicAcc = function (e) {
       var b = e.target;
       while (b && b !== this && !b.getAttribute('data-acc')) b = b.parentNode;
       if (!b || b === this) return;
-      accion(b.getAttribute('data-acc'), parseInt(b.getAttribute('data-id'), 10));
-    });
+      accion(b.getAttribute('data-acc'), parseInt(b.getAttribute('data-id'), 10), parseInt(b.getAttribute('data-i'), 10));
+    };
+    $('contenido').addEventListener('click', clicAcc);
     $('fab').addEventListener('click', function () {
       if (pestana === 'crecimiento') formMedida(0);
       else if (pestana === 'citas') formCita(0);
       else formMed(0);
     });
+    var detEl = document.createElement('section');
+    detEl.id = 'detalle'; detEl.className = 'detalle'; detEl.hidden = true;
+    document.body.appendChild(detEl);
+    detEl.addEventListener('click', clicAcc);
     var gEl = document.createElement('section');
     gEl.id = 'grafica'; gEl.className = 'grafica'; gEl.hidden = true;
     document.body.insertBefore(gEl, $('contenido'));
