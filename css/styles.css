@@ -155,3 +155,33 @@ main{flex:1;overflow-y:auto;padding:4px 14px 150px;-webkit-overflow-scrolling:to
 /* ---- sin selección de texto al mantener pulsado ---- */
 body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 input,textarea{-webkit-user-select:text;user-select:text}
+
+/* ---- tarjeta de medicina compacta ---- */
+.tarjeta.med{padding:12px 14px;margin:8px 0}
+.med .fila{align-items:flex-start}
+.med .titulo{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{white-space:nowrap;flex:none}
+.chip.est{font-weight:700}
+.med-res{font-weight:700;font-size:16px;margin-top:2px}
+.nota-1{font-size:13px;color:var(--suave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.med .acciones{margin-top:8px;flex-wrap:nowrap}
+.acc.grande{flex:1;justify-content:center;padding:9px 8px}
+.acc.fuerte.grande{flex:1.4}
+
+/* ---- pantalla de historial de dosis ---- */
+.detalle{position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;background:var(--fondo);padding-top:env(safe-area-inset-top,0px)}
+.det-cab{display:flex;align-items:center;gap:12px;padding:10px 14px}
+.det-tit{min-width:0}
+.det-tit .titulo{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:20px}
+.det-cuerpo{flex:1;overflow-y:auto;padding:4px 14px 16px;-webkit-overflow-scrolling:touch}
+.det-pie{padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px));background:var(--fondo);border-top:1px solid var(--borde)}
+.det-pie .pri{width:100%;border:0;border-radius:18px;padding:15px;font:inherit;font-weight:700;font-size:17px}
+.dosis{display:flex;align-items:center;gap:10px;background:var(--blanco);border:1px solid var(--borde);border-radius:18px;padding:10px 12px;margin:6px 0}
+.dosis .info{flex:1;min-width:0}
+.dosis .hora{font-weight:700;font-size:17px}
+.dosis .chip{font-size:12px}
+.chip.ok{background:var(--menta)}
+.chip.tarde{background:var(--durazno)}
+.chip.antes{background:var(--celeste)}
+.mini{width:38px;height:38px;border:0;border-radius:50%;background:var(--rosa);color:var(--texto);display:flex;align-items:center;justify-content:center;flex:none}
+.mini svg{width:18px;height:18px}
