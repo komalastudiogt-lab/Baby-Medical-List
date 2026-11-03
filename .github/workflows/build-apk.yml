@@ -53,7 +53,7 @@ jobs:
           [ -f icon.png ] && cp icon.png www/icon.png || true
 
           npm init -y
-          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/filesystem@7 @capacitor/share@7 @capacitor/local-notifications@7 @capacitor/assets html2pdf.js@0.10.1 @fontsource/nunito@5 esbuild
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/filesystem@7 @capacitor/share@7 @capacitor/local-notifications@7 @capacitor/status-bar@7 @capacitor/assets html2pdf.js@0.10.1 @fontsource/nunito@5 esbuild
 
           cp node_modules/html2pdf.js/dist/html2pdf.bundle.min.js www/js/html2pdf.js
           mkdir -p www/fonts
@@ -63,10 +63,17 @@ jobs:
           import { Filesystem, Directory } from '@capacitor/filesystem';
           import { Share } from '@capacitor/share';
           import { LocalNotifications } from '@capacitor/local-notifications';
+          import { StatusBar, Style } from '@capacitor/status-bar';
 
           window.NativeShare = async function (base64Data, filename) {
             const r = await Filesystem.writeFile({ path: filename, data: base64Data, directory: Directory.Cache });
             await Share.share({ title: 'Reporte de Baby Medical List', url: r.uri, dialogTitle: 'Compartir o guardar PDF' });
+          };
+
+          window.NativeStatus = {
+            oscuro: async function (si) {
+              try { await StatusBar.setStyle({ style: si ? Style.Dark : Style.Light }); } catch (e) {}
+            }
           };
 
           const CANAL = 'recordatorios';
